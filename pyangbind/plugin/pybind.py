@@ -32,6 +32,7 @@ from collections import OrderedDict
 import six
 from bitarray import bitarray
 from pyang import plugin, statements, util
+from pyang.error import err_level, is_warning
 
 import pyangbind.helpers.misc as misc_help
 from pyangbind.helpers.identity import IdentityStore
@@ -298,6 +299,10 @@ def build_pybind(ctx, modules, fd):
     # we provided but then unused.
     if len(ctx.errors):
         for e in ctx.errors:
+            if is_warning(err_level(e[1])):
+                if ctx.opts.verbose:
+                    print("INFO: ignoring warning %s" % str(e))
+                continue
             print("INFO: encountered %s" % str(e))
             if not e[1] in ["UNUSED_IMPORT", "PATTERN_ERROR"]:
                 sys.stderr.write("FATAL: pyangbind cannot build module that pyang" + " has found errors with.\n")
