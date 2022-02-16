@@ -1,1 +1,1 @@
-__version__ = "0.8.1+spytest.20211122"
+__version__ = "0.8.1+spytest.20220216"

@@ -201,7 +201,7 @@ class PyangBindClass(plugin.PyangPlugin):
 
     def emit(self, ctx, modules, fd):
         # When called, call the build_pyangbind function.
-        build_pybind(ctx, modules, fd)
+        build_pybind(self, ctx, modules, fd)
 
     def add_opts(self, optparser):
         # Add pyangbind specific operations to pyang. These are documented in the
@@ -228,6 +228,13 @@ class PyangBindClass(plugin.PyangPlugin):
             dest="split_class_dir",
             help="""Split the code output into
                                    multiple directories""",
+        ),
+        option_group.add_option(
+            "--split-class-module",
+            metavar="OUTPUT DIR",
+            dest="split_class_module",
+            help="""Split the code output into
+                                   multiple files(per yang module)""",
         ),
         option_group.add_option(
             "--interesting-extension",
@@ -280,12 +287,15 @@ class PyangBindClass(plugin.PyangPlugin):
                                   the root of each module""",
         ),
         optparser.add_option_group(option_group)
+        self.opt_parser = optparser
 
 
 # Core function to build the pyangbind output - starting with building the
 # dependencies - and then working through the instantiated tree that pyang has
 # already parsed.
-def build_pybind(ctx, modules, fd):
+def build_pybind(plugin_obj, ctx, modules, fd):
+    if ctx.opts.split_class_module and ctx.opts.split_class_dir:
+        plugin_obj.opt_parser.error("options --split-class-module and --split-class-dir are mutually exclusive")
     # Restrict the output of the plugin to only the modules that are supplied
     # to pyang. More modules are parsed by pyangbind to resolve typedefs and
     # identities.
@@ -343,8 +353,11 @@ elif six.PY2:
 
 """
 
-    if not ctx.opts.split_class_dir:
+    if not ctx.opts.split_class_dir and not ctx.opts.split_class_module:
         fd.write(ctx.pybind_common_hdr)
+    elif ctx.opts.split_class_module:
+        if not os.path.exists(ctx.opts.split_class_module):
+            os.makedirs(ctx.opts.split_class_module)
     else:
         ctx.pybind_split_basepath = os.path.abspath(ctx.opts.split_class_dir)
         if not os.path.exists(ctx.pybind_split_basepath):
@@ -413,7 +426,16 @@ elif six.PY2:
     # Iterate through the tree which pyang has built, solely for the modules
     # that pyang was asked to build
     for modname in pyang_called_modules:
+        print("Generating pyangbind for %s ..." % (modname))
         module = module_d[modname]
+        if ctx.opts.split_class_module:
+            if six.PY3:
+                mpath = f"{ctx.opts.split_class_module}/{safe_name(modname)}.py"
+                fd = open(mpath, "w", encoding="utf-8")
+            else:
+                mpath = "%s/%s.py" % (ctx.opts.split_class_module, safe_name(modname))
+                fd = codecs.open(mpath, "w", encoding="utf-8")
+            fd.write(ctx.pybind_common_hdr)
         mods = [module]
         for i in module.search("include"):
             subm = ctx.get_module(i.arg)
