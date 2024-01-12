@@ -1394,7 +1394,18 @@ def build_elemtype(ctx, et, prefix=False):
             # at this point. In the case that we are referencing a type that is a
             # typedef, then this has been added to the class_map.
             try:
-                elemtype = class_map[et.arg]
+                # Always prepare prefix
+                # if type has no prefix, use local prefix
+                # TODO: change class_map to use module name instead of prefix, as prefix can be over-written
+                # TODO: once the class_map is changed, modify below logic to use mod name instead of prefix
+                # TODO: remove prefix as an argument in build_type. I don't see any logic here.
+                t_prefix = et.i_module.i_prefix
+                if ":" in et.arg:
+                    t_prefix = et.arg.split(":")
+                key_str = "{}:{}".format(t_prefix, et.arg)
+                if key_str not in class_map:
+                    key_str = et.arg
+                elemtype = class_map[key_str]
             except KeyError:
                 passed = False
                 if prefix:
