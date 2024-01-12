@@ -30,13 +30,18 @@ import sys
 from collections import OrderedDict
 
 import six
-from bitarray import bitarray
 from pyang import plugin, statements, util
 from pyang.error import err_level, is_warning
 
 import pyangbind.helpers.misc as misc_help
 from pyangbind.helpers.identity import IdentityStore
-from pyangbind.lib.yangtypes import RestrictedClassType, YANGBool, safe_name
+from pyangbind.lib.yangtypes import (
+    RestrictedClassType,
+    YANGBool,
+    safe_name,
+    YANGBinary,
+    YANGBitsType,
+)
 
 # Python3 support
 if six.PY3:
@@ -101,11 +106,17 @@ class_map = {
         "quote_arg": True,
         "pytype": YANGBool,
     },
-    "binary": {"native_type": "bitarray", "base_type": True, "quote_arg": True, "pytype": bitarray},
+    "binary": {"native_type": "YANGBinary", "base_type": True, "quote_arg": True, "pytype": YANGBinary},
     "uint8": {
         "native_type": ("RestrictedClassType(base_type=int," + " restriction_dict={'range': ['0..255']}, int_size=8)"),
         "base_type": True,
         "pytype": RestrictedClassType(base_type=int, restriction_dict={"range": ["0..255"]}, int_size=8),
+    },
+    "bits": {
+        "native_type": "YANGBitsType(allowed_bits={})",
+        "base_type": True,
+        "quote_arg": True,
+        "pytype": YANGBitsType(allowed_bits={}),
     },
     "uint16": {
         "native_type": (
@@ -193,7 +204,6 @@ def pyang_plugin_init():
 
 
 class PyangBindClass(plugin.PyangPlugin):
-
     def add_output_format(self, fmts):
         # Add the 'pybind' output format to pyang.
         self.multiple_modules = True
@@ -333,13 +343,14 @@ def build_pybind(plugin_obj, ctx, modules, fd):
         "YANGListType",
         "YANGDynClass",
         "ReferenceType",
+        "YANGBinary",
+        "YANGBitsType",
     ]
     for library in yangtypes_imports:
         ctx.pybind_common_hdr += "from pyangbind.lib.yangtypes import {}\n".format(library)
     ctx.pybind_common_hdr += "from pyangbind.lib.base import PybindBase\n"
     ctx.pybind_common_hdr += "from collections import OrderedDict\n"
     ctx.pybind_common_hdr += "from decimal import Decimal\n"
-    ctx.pybind_common_hdr += "from bitarray import bitarray\n"
     ctx.pybind_common_hdr += "import six\n"
 
     # Python3 support
@@ -525,6 +536,7 @@ def build_typedefs(ctx, defnd):
     known_types = list(class_map.keys())
     known_types.append("enumeration")
     known_types.append("leafref")
+    known_types.append("bits")
     base_types = copy.deepcopy(known_types)
     process_typedefs_ordered = []
 
@@ -604,6 +616,7 @@ def build_typedefs(ctx, defnd):
         # in the class_map, and hence we append it here.
         known_types.append("enumeration")
         known_types.append("leafref")
+        known_types.append("bits")
 
         # Don't allow duplicate definitions of types
         if type_name in known_types:
@@ -646,7 +659,6 @@ def build_typedefs(ctx, defnd):
             parent_type = []
             default = False if default_stmt is None else default_stmt.arg
             for i in elemtype:
-
                 if isinstance(i[1]["native_type"], list):
                     native_type.extend(i[1]["native_type"])
                 else:
@@ -668,6 +680,9 @@ def build_typedefs(ctx, defnd):
                     default = (i[1]["default"], q)
             class_map[type_name] = {"native_type": native_type, "base_type": False, "parent_type": parent_type}
             if default:
+                if not isinstance(default, tuple):
+                    q = True if "quote_arg" in i[1] else False
+                    default = (default, q)
                 class_map[type_name]["default"] = default[0]
                 class_map[type_name]["quote_default"] = default[1]
 
@@ -675,7 +690,6 @@ def build_typedefs(ctx, defnd):
 
 
 def get_children(ctx, fd, i_children, module, parent, path=str(), parent_cfg=True, choice=False, register_paths=True):
-
     # Iterative function that is called for all elements that have childen
     # data nodes in the tree. This function resolves those nodes into the
     # relevant leaf, or container/list configuration and outputs the python
@@ -1358,6 +1372,22 @@ def build_elemtype(ctx, et, prefix=False):
                     pp.pprint(et.arg)
                     pp.pprint(base_stmt.arg)
                 sys.exit(127)
+        elif et.arg == "bits":
+            allowed_bits = {}
+            for bit in et.search("bit"):
+                position = bit.search_one("position")
+                if position is not None:
+                    pos = position.arg
+                else:
+                    pos = 1 + max(allowed_bits)
+                allowed_bits[bit.arg] = pos
+            cls = "restricted-bits"
+            elemtype = {
+                "native_type": f"YANGBitsType(allowed_bits={allowed_bits})",
+                "base_type": True,
+                "parent_type": "bits",
+                "quote_arg": True,
+            }
         else:
             # For all other cases, then we should be able to look up directly in the
             # class_map for the defined type, since these are not 'derived' types
@@ -1490,12 +1520,15 @@ def get_element(ctx, fd, element, module, parent, path, parent_cfg=True, choice=
                 register_paths=register_paths,
             )
 
+            elemconfigdef = element.search_one("config")
+            elemconfig = class_bool_map[elemconfigdef.arg] if elemconfigdef else True
+
             elemdict = {
                 "name": safe_name(element.arg),
                 "origtype": element.keyword,
                 "class": element.keyword,
                 "path": safe_name(npath),
-                "config": True,
+                "config": elemconfig,
                 "description": elemdescr,
                 "yang_name": element.arg,
                 "choice": choice,
@@ -1581,7 +1614,7 @@ def get_element(ctx, fd, element, module, parent, path, parent_cfg=True, choice=
 
         # we need to indicate that the default type for the class_map
         # is str
-        tmp_class_map = copy.deepcopy(class_map)
+        tmp_class_map = copy.copy(class_map)
         tmp_class_map["enumeration"] = {"parent_type": "string"}
 
         if not default_type:
@@ -1656,7 +1689,8 @@ def get_element(ctx, fd, element, module, parent, path, parent_cfg=True, choice=
             quote_arg = default_type["quote_arg"] if "quote_arg" in default_type else False
             default_type = default_type["native_type"]
 
-        elemconfig = class_bool_map[element.search_one("config").arg] if element.search_one("config") else True
+        elemconfigdef = element.search_one("config")
+        elemconfig = class_bool_map[elemconfigdef.arg] if elemconfigdef else True
 
         elemname = safe_name(element.arg)
 

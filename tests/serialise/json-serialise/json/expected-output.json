@@ -51,7 +51,7 @@
                 "one-leaf": "hi", 
                 "typedef-one": "test", 
                 "boolean": true, 
-                "binary": "010101", 
+                "binary": "eWFuZw==",
                 "union": "16", 
                 "k1": 1, 
                 "enumeration": "one", 
@@ -78,7 +78,8 @@
                 "decleaf": 42.4422,
                 "typedef-decimal": 21.21,
                 "range-decimal": 4.44443322,
-                "typedef-decimalrange": 42.42
+                "typedef-decimalrange": 42.42,
+                "bits": "flag1 flag3"
             }
         }
     }

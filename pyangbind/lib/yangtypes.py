@@ -21,14 +21,15 @@ limitations under the License.
 """
 from __future__ import unicode_literals
 
+import base64
 import collections
+from collections import abc
 import copy
 import uuid
 from decimal import Decimal
 
 import regex
 import six
-from bitarray import bitarray
 
 # Words that could turn up in YANG definition files that are actually
 # reserved names in Python, such as being builtin types. This list is
@@ -120,7 +121,7 @@ def remove_path_attributes(p):
 def safe_name(arg):
     """
     Make a leaf or container name safe for use in Python.
-  """
+    """
     arg = arg.replace("-", "_")
     arg = arg.replace(".", "_")
     if arg in reserved_name:
@@ -134,23 +135,24 @@ def RestrictedPrecisionDecimalType(*args, **kwargs):
     """
     Function to return a new type that is based on decimal.Decimal with
     an arbitrary restricted precision.
-  """
+    """
     precision = kwargs.pop("precision", False)
 
     class RestrictedPrecisionDecimal(Decimal):
         """
-      Class extending decimal.Decimal to restrict the precision that is
-      stored, supporting the fraction-digits argument of the YANG decimal64
-      type.
-    """
+        Class extending decimal.Decimal to restrict the precision that is
+        stored, supporting the fraction-digits argument of the YANG decimal64
+        type.
+        """
+
         _precision = 10.0 ** (-1.0 * int(precision))
         _pybind_generated_by = "RestrictedPrecisionDecimal"
 
         def __new__(self, *args, **kwargs):
             """
-        Overloads the decimal __new__ function in order to round the input
-        value to the new value.
-      """
+            Overloads the decimal __new__ function in order to round the input
+            value to the new value.
+            """
             if self._precision is not None:
                 if len(args):
                     value = Decimal(args[0]).quantize(Decimal(str(self._precision)))
@@ -172,7 +174,7 @@ def RestrictedClassType(*args, **kwargs):
     a specified restriction. The restriction_type specified determines the
     type of restriction placed on the class, and the restriction_arg gives
     any input data that this function needs.
-  """
+    """
     base_type = kwargs.pop("base_type", six.text_type)
     restriction_type = kwargs.pop("restriction_type", None)
     restriction_arg = kwargs.pop("restriction_arg", None)
@@ -191,10 +193,11 @@ def RestrictedClassType(*args, **kwargs):
 
     class RestrictedClass(base_type):
         """
-      A class that restricts the base_type class with a new function that the
-      input value is validated against before being applied. The function is
-      a static method which is assigned to _restricted_test.
-    """
+        A class that restricts the base_type class with a new function that the
+        input value is validated against before being applied. The function is
+        a static method which is assigned to _restricted_test.
+        """
+
         _pybind_generated_by = "RestrictedClassType"
 
         _restricted_class_base = restricted_class_hint
@@ -202,10 +205,10 @@ def RestrictedClassType(*args, **kwargs):
 
         def __init__(self, *args, **kwargs):
             """
-        Overloads the base_class __init__ method to check the input argument
-        against the validation function - returns on instance of the base_type
-        class, which can be manipulated as per a usual Python object.
-      """
+            Overloads the base_class __init__ method to check the input argument
+            against the validation function - returns on instance of the base_type
+            class, which can be manipulated as per a usual Python object.
+            """
             try:
                 self.__check(args[0])
             except IndexError:
@@ -228,7 +231,6 @@ def RestrictedClassType(*args, **kwargs):
             range_single_value_regex = regex.compile("(?P<value>\-?[0-9\.]+)")
 
             def convert_regexp(pattern):
-
                 # Some patterns include a $ character in them in some IANA modules, this
                 # is not escaped. Do some logic to escape them, whilst leaving one at the
                 # end of the string if it's there.
@@ -271,11 +273,8 @@ def RestrictedClassType(*args, **kwargs):
                     raise ValueError("Invalid range or length argument specified")
 
             def in_range_check(low_high_tuples, length=False):
-
                 def range_check(value):
-                    if length and isinstance(value, bitarray):
-                        value = value.length()
-                    elif length:
+                    if length:
                         value = len(value)
                     range_results = []
                     for check_tuple in low_high_tuples:
@@ -296,7 +295,6 @@ def RestrictedClassType(*args, **kwargs):
                 return range_check
 
             def match_pattern_check(regexp):
-
                 def mp_check(value):
                     if not isinstance(value, six.string_types + (six.text_type,)):
                         return False
@@ -334,12 +332,7 @@ def RestrictedClassType(*args, **kwargs):
                         except Exception:
                             raise TypeError("must specify a numeric type for a range " + "argument")
                 elif rtype == "length":
-                    # When the type is a binary then the length is specified in
-                    # octets rather than bits, so we must specify the length to
-                    # be multiplied by 8.
                     multiplier = 1
-                    if base_type == bitarray:
-                        multiplier = 8
                     lengths = []
                     for range_spec in rarg:
                         lengths.append(build_length_range_tuples(range_spec, length=True, multiplier=multiplier))
@@ -383,9 +376,9 @@ def RestrictedClassType(*args, **kwargs):
 
         def __check(self, v):
             """
-        Run the _restriction_test static method against the argument v,
-        returning an error if the value does not validate.
-      """
+            Run the _restriction_test static method against the argument v,
+            returning an error if the value does not validate.
+            """
             v = base_type(v)
             for chkfn in self._restriction_tests:
                 if not chkfn(v):
@@ -394,9 +387,9 @@ def RestrictedClassType(*args, **kwargs):
 
         def getValue(self, *args, **kwargs):
             """
-        For types where there is a dict_key restriction (such as YANG
-        enumeration), return the value of the dictionary key.
-      """
+            For types where there is a dict_key restriction (such as YANG
+            enumeration), return the value of the dictionary key.
+            """
             if "dict_key" in self._restriction_dict:
                 value = kwargs.pop("mapped", False)
                 if value:
@@ -411,12 +404,12 @@ def TypedListType(*args, **kwargs):
     Return a type that consists of a list object where only
     certain types (specified by allowed_type kwarg to the function)
     can be added to the list.
-  """
+    """
     allowed_type = kwargs.pop("allowed_type", six.text_type)
     if not isinstance(allowed_type, list):
         allowed_type = [allowed_type]
 
-    class TypedList(collections.MutableSequence):
+    class TypedList(abc.MutableSequence):
         _pybind_generated_by = "TypedListType"
         _list = list()
 
@@ -538,7 +531,7 @@ def YANGListType(*args, **kwargs):
     Where a list exists that does not have a key - which can be the
     case for 'config false' lists - a uuid is generated and used
     as the key for the list.
-  """
+    """
     try:
         keyname = args[0]
         listclass = args[1]
@@ -888,7 +881,7 @@ class YANGBool(int):
 
     This bool also accepts input matching strings to handle the
     forms that might be used in YANG modules.
-  """
+    """
 
     def __new__(self, *args, **kwargs):
         false_args = ["false", "False", False, 0, "0"]
@@ -935,7 +928,7 @@ def YANGDynClass(*args, **kwargs):
                      node.
       - presence:    Whether the YANG container that is being
                      represented has the presence keyword
-  """
+    """
     base_type = kwargs.pop("base", False)
     default = kwargs.pop("default", False)
     yang_name = kwargs.pop("yang_name", False)
@@ -1198,7 +1191,6 @@ def YANGDynClass(*args, **kwargs):
                 return []
 
         def __generate_extmethod(self, methodfn):
-
             def extmethodfn(*args, **kwargs):
                 kwargs["caller"] = self._register_path()
                 kwargs["path_helper"] = self._path_helper
@@ -1232,14 +1224,13 @@ def ReferenceType(*args, **kwargs):
     to be a relative (rather than absolute) path. The require_instance
     argument specifies whether errors should be thrown in the case
     that the referenced instance does not exist.
-  """
+    """
     ref_path = kwargs.pop("referenced_path", False)
     path_helper = kwargs.pop("path_helper", None)
     caller = kwargs.pop("caller", False)
     require_instance = kwargs.pop("require_instance", False)
 
     class ReferencePathType(object):
-
         __slots__ = (
             "_referenced_path",
             "_path_helper",
@@ -1354,3 +1345,101 @@ def ReferenceType(*args, **kwargs):
             return str(self._get_ptr())
 
     return type(ReferencePathType(*args, **kwargs))
+
+
+class YANGBinary(bytes):
+    """
+    A custom binary class for using in YANG.
+    """
+
+    def __new__(self, *args, **kwargs):
+        value = b""
+        if args:
+            value = args[0]
+            if isinstance(value, str):
+                value = base64.b64decode(value)
+            elif isinstance(value, bytes):
+                value = value
+            else:
+                raise ValueError(f"invalid type for {value}: {type(value)}")
+
+        return bytes.__new__(self, value)
+
+    def __repr__(self):
+        return str(self)
+
+    def __str__(self, encoding="ascii", errors="replace"):
+        return str(self, encoding=encoding, errors=errors)
+
+
+def YANGBitsType(allowed_bits):
+    class YANGBits(set):
+        """Map the ``bits`` built-in type of YANG
+
+        From RFC 6020, 9.7:
+
+        > The bits built-in type represents a bit set. That is, a bits value
+        > is a set of flags identified by small integer position numbers
+        > starting at 0. Each bit number has an assigned name.
+        >
+        > ... In the canonical form, the bit values are separated by a single
+        > space character and they appear ordered by their position.
+
+        __init__ parses such a string, and __str__() prints the value as
+        above. In the Python model, the bits that are set are kept as a set
+        of strings.
+
+        Override the ``add()``, ``discard()`` and similar methods to set and
+        clear the bits, checking for legal values.
+
+        :param allowed_bits: dictionary of legal bit values and positions; it
+            is set when generating the YANG-Python type mapping, when
+            ``pyangbing.lib.pybing.build_elemtype`` recurses over the YANG model
+        """
+
+        _pybind_generated_by = "YANGBits"
+
+        def __init__(self, *args, **kwargs):
+            super().__init__()
+            self._allowed_bits = allowed_bits
+
+            if args:
+                value = args[0]
+                for bit in value.split():
+                    self.add(bit)
+
+        def _add_bit_definition(self, bit, position):
+            self._allowed_bits[bit] = position
+
+        # overwrite set methods to 1/ check for legal values and 2/ set the
+        # changed flag
+        def add(self, bit):
+            if bit not in self._allowed_bits:
+                raise ValueError(f"Bit value {bit} not valid, expected one of {self._allowed_bits}")
+            super().add(bit)
+            self._mchanged = True
+
+        def clear(self):
+            super().clear()
+            self._mchanged = True
+
+        def discard(self, bit):
+            if bit not in self._allowed_bits:
+                raise ValueError(f"Bit value {bit} not valid, expected one of {self._allowed_bits}")
+            super().discard(bit)
+            self._mchanged = True
+
+        def pop(self):
+            super().pop()
+            self._mchanged = True
+
+        def remove(self, bit):
+            super().remove(bit)
+            self._mchanged = True
+
+        def __str__(self, encoding="ascii", errors="replace"):
+            """Return bits as shown in JSON."""
+            sort_key = self._allowed_bits.__getitem__
+            return " ".join(sorted(self, key=sort_key))
+
+    return YANGBits

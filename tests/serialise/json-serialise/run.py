@@ -6,7 +6,6 @@ import unittest
 from decimal import Decimal
 
 import six
-from bitarray import bitarray
 
 from pyangbind.lib.pybindJSON import dumps
 from pyangbind.lib.xpathhelper import YANGPathHelper
@@ -48,7 +47,7 @@ class JSONSerialiseTests(PyangBindTestCase):
         self.serialise_obj.c1.t1.add(32)
         self.serialise_obj.c1.l1[1].leafref = 16
 
-        self.serialise_obj.c1.l1[1].binary = bitarray("010101")
+        self.serialise_obj.c1.l1[1].binary = b"yang"
         self.serialise_obj.c1.l1[1].boolean = True
         self.serialise_obj.c1.l1[1].enumeration = "one"
         self.serialise_obj.c1.l1[1].identityref = "idone"
@@ -64,6 +63,8 @@ class JSONSerialiseTests(PyangBindTestCase):
         self.serialise_obj.c1.l1[1].range_decimal = Decimal("4.44443322")
         self.serialise_obj.c1.l1[1].typedef_decimalrange = Decimal("42.42")
         self.serialise_obj.c1.l1[1].decleaf = Decimal("42.4422")
+        self.serialise_obj.c1.l1[1].bits.add("flag1")
+        self.serialise_obj.c1.l1[1].bits.add("flag3")
 
         for i in range(1, 10):
             self.serialise_obj.c1.l2.add(i)
