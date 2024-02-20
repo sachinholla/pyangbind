@@ -1541,7 +1541,7 @@ def get_element(ctx, fd, element, module, parent, path, parent_cfg=True, choice=
             # ordered.
             if element.keyword == "list":
                 elemdict["key"] = (
-                    safe_name(element.search_one("key").arg) if element.search_one("key") is not None else False
+                    " ".join([safe_name(key) for key in element.search_one("key").arg.split(" ")]) if element.search_one("key") is not None else False
                 )
                 elemdict["yang_keys"] = (
                     element.search_one("key").arg if element.search_one("key") is not None else False
